@@ -43,6 +43,7 @@ import LinkedAccounts from '@/pages/LinkedAccounts'
 import { Button } from './components/ui/button'
 import Volumes from './pages/Volumes'
 import NotFound from './pages/NotFound'
+import Playground from './pages/Playground'
 
 // Simple redirection components for external URLs
 const DocsRedirect = () => {
@@ -140,6 +141,7 @@ function App() {
             index
             element={<Navigate to={`${getRouteSubPath(RoutePath.SANDBOXES)}${location.search}`} replace />}
           />
+          <Route path={getRouteSubPath(RoutePath.PLAYGROUND)} element={<Playground />} />
           <Route path={getRouteSubPath(RoutePath.KEYS)} element={<Keys />} />
           <Route path={getRouteSubPath(RoutePath.SANDBOXES)} element={<Sandboxes />} />
           <Route path={getRouteSubPath(RoutePath.SNAPSHOTS)} element={<Snapshots />} />
