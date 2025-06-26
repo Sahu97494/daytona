@@ -22,7 +22,7 @@ export { DaytonaError } from './errors/DaytonaError'
 export { Image } from './Image'
 export { Sandbox } from './Sandbox'
 export type { SandboxCodeToolbox } from './Sandbox'
-export { CreateSnapshotParams } from './Snapshot'
+export type { CreateSnapshotParams } from './Snapshot'
 
 // Chart and artifact types
 export { ChartType } from './types/Charts'
