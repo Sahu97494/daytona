@@ -12,10 +12,13 @@ import { SandboxState } from '../enums/sandbox-state.enum'
 import { SandboxDesiredState } from '../enums/sandbox-desired-state.enum'
 import { RunnerService } from '../services/runner.service'
 import { RunnerState } from '../enums/runner-state.enum'
+
 import { InjectRedis } from '@nestjs-modules/ioredis'
 import { Redis } from 'ioredis'
 import { RedisLockProvider } from '../common/redis-lock.provider'
+
 import { SANDBOX_WARM_POOL_UNASSIGNED_ORGANIZATION } from '../constants/sandbox.constants'
+
 import { OnEvent } from '@nestjs/event-emitter'
 import { SandboxEvents } from '../constants/sandbox-events.constants'
 import { SandboxStoppedEvent } from '../events/sandbox-stopped.event'
@@ -23,53 +26,16 @@ import { SandboxStartedEvent } from '../events/sandbox-started.event'
 import { SandboxArchivedEvent } from '../events/sandbox-archived.event'
 import { SandboxDestroyedEvent } from '../events/sandbox-destroyed.event'
 import { SandboxCreatedEvent } from '../events/sandbox-create.event'
+
 import { OtelSpan } from '../../common/decorators/otel.decorator'
 
 import { SandboxStartAction } from './sandbox-actions/sandbox-start.action'
 import { SandboxStopAction } from './sandbox-actions/sandbox-stop.action'
 import { SandboxDestroyAction } from './sandbox-actions/sandbox-destroy.action'
 import { SandboxArchiveAction } from './sandbox-actions/sandbox-archive.action'
-import { RunnerAdapterFactory } from '../runner-adapter/runnerAdapter'
+import { SYNC_AGAIN, DONT_SYNC_AGAIN } from './sandbox-actions/sandbox.action'
 
 export const SYNC_INSTANCE_STATE_LOCK_KEY = 'sync-instance-state-'
-export const SYNC_AGAIN = 'sync-again'
-export const DONT_SYNC_AGAIN = 'dont-sync-again'
-export type SyncState = typeof SYNC_AGAIN | typeof DONT_SYNC_AGAIN
-
-@Injectable()
-export abstract class SandboxAction {
-  constructor(
-    protected readonly runnerService: RunnerService,
-    protected runnerAdapterFactory: RunnerAdapterFactory,
-    @InjectRepository(Sandbox)
-    protected readonly sandboxRepository: Repository<Sandbox>,
-  ) {}
-
-  abstract run(sandbox: Sandbox): Promise<SyncState>
-
-  protected async updateSandboxState(
-    sandboxId: string,
-    state: SandboxState,
-    runnerId?: string | null | undefined,
-    errorReason?: string,
-  ) {
-    const sandbox = await this.sandboxRepository.findOneByOrFail({
-      id: sandboxId,
-    })
-    if (sandbox.state === state && sandbox.runnerId === runnerId && sandbox.errorReason === errorReason) {
-      return
-    }
-    sandbox.state = state
-    if (runnerId !== undefined) {
-      sandbox.runnerId = runnerId
-    }
-    if (errorReason !== undefined) {
-      sandbox.errorReason = errorReason
-    }
-
-    await this.sandboxRepository.save(sandbox)
-  }
-}
 
 @Injectable()
 export class SandboxManager {
