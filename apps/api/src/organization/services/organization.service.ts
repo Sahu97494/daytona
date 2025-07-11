@@ -3,7 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0
  */
 
-import { ForbiddenException, Injectable, NotFoundException, Logger, OnModuleInit } from '@nestjs/common'
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Logger,
+  OnModuleInit,
+  BadRequestException,
+} from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { EntityManager, In, IsNull, LessThan, MoreThan, Not, Or, Repository } from 'typeorm'
 import { CreateOrganizationDto } from '../dto/create-organization.dto'
@@ -35,6 +42,14 @@ import { SandboxDesiredState } from '../../sandbox/enums/sandbox-desired-state.e
 import { SnapshotRunner } from '../../sandbox/entities/snapshot-runner.entity'
 import { OrganizationSuspendedSnapshotRunnerRemovedEvent } from '../events/organization-suspended-snapshot-runner-removed'
 import { SystemRole } from '../../user/enums/system-role.enum'
+import { SandboxUsageOverviewInternalDto, SandboxUsageOverviewSchema } from '../dto/sandbox-usage-overview-internal.dto'
+import {
+  SnapshotUsageOverviewInternalDto,
+  SnapshotUsageOverviewSchema,
+} from '../dto/snapshot-usage-overview-internal.dto'
+import { VolumeState } from '../../sandbox/enums/volume-state.enum'
+import { VolumeUsageOverviewInternalDto, VolumeUsageOverviewSchema } from '../dto/volume-usage-overview-internal.dto'
+import { SnapshotState } from '../../sandbox/enums/snapshot-state.enum'
 
 @Injectable()
 export class OrganizationService implements OnModuleInit {
@@ -119,36 +134,208 @@ export class OrganizationService implements OnModuleInit {
     return this.removeWithEntityManager(this.organizationRepository.manager, organization)
   }
 
+  async getSandboxUsageOverview(
+    organizationId: string,
+    organization?: Organization,
+  ): Promise<SandboxUsageOverviewInternalDto> {
+    if (organization && organization.id !== organizationId) {
+      throw new BadRequestException('Organization ID mismatch')
+    }
+
+    if (!organization) {
+      organization = await this.organizationRepository.findOne({ where: { id: organizationId } })
+    }
+
+    if (!organization) {
+      throw new NotFoundException(`Organization with ID ${organizationId} not found`)
+    }
+
+    let sandboxUsageOverview: SandboxUsageOverviewInternalDto | null = null
+
+    // check cache first
+    const cacheKey = `sandbox-usage-${organization.id}`
+    const cachedData = await this.redis.get(cacheKey)
+
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData)
+        sandboxUsageOverview = SandboxUsageOverviewSchema.parse(parsed)
+      } catch {
+        this.logger.warn(`Failed to parse cached sandbox usage overview for organization ${organizationId}`)
+        this.redis.del(cacheKey)
+      }
+    }
+
+    // cache hit
+    if (sandboxUsageOverview) {
+      return sandboxUsageOverview
+    }
+
+    // cache miss
+    const ignoredStates = [SandboxState.DESTROYED, SandboxState.ARCHIVED, SandboxState.ERROR, SandboxState.BUILD_FAILED]
+    const inactiveStates = [...ignoredStates, SandboxState.STOPPED, SandboxState.ARCHIVING]
+
+    const sandboxUsageMetrics: {
+      used_disk: number
+      used_cpu: number
+      used_mem: number
+    } = await this.sandboxRepository
+      .createQueryBuilder('sandbox')
+      .select([
+        'SUM(CASE WHEN sandbox.state NOT IN (:...ignoredStates) THEN sandbox.disk ELSE 0 END) as used_disk',
+        'SUM(CASE WHEN sandbox.state NOT IN (:...inactiveStates) THEN sandbox.cpu ELSE 0 END) as used_cpu',
+        'SUM(CASE WHEN sandbox.state NOT IN (:...inactiveStates) THEN sandbox.mem ELSE 0 END) as used_mem',
+      ])
+      .where('sandbox.organizationId = :organizationId', { organizationId })
+      .setParameter('ignoredStates', ignoredStates)
+      .setParameter('inactiveStates', inactiveStates)
+      .getRawOne()
+
+    const currentDiskUsage = Number(sandboxUsageMetrics.used_disk) || 0
+    const currentCpuUsage = Number(sandboxUsageMetrics.used_cpu) || 0
+    const currentMemoryUsage = Number(sandboxUsageMetrics.used_mem) || 0
+
+    sandboxUsageOverview = {
+      totalCpuQuota: organization.totalCpuQuota,
+      totalMemoryQuota: organization.totalMemoryQuota,
+      totalDiskQuota: organization.totalDiskQuota,
+      currentCpuUsage,
+      currentMemoryUsage,
+      currentDiskUsage,
+    }
+
+    // cache the result
+    await this.redis.setex(cacheKey, 10, JSON.stringify(sandboxUsageOverview))
+
+    return sandboxUsageOverview
+  }
+
+  async getSnapshotUsageOverview(
+    organizationId: string,
+    organization?: Organization,
+  ): Promise<SnapshotUsageOverviewInternalDto> {
+    if (organization && organization.id !== organizationId) {
+      throw new BadRequestException('Organization ID mismatch')
+    }
+
+    if (!organization) {
+      organization = await this.organizationRepository.findOne({ where: { id: organizationId } })
+    }
+
+    if (!organization) {
+      throw new NotFoundException(`Organization with ID ${organizationId} not found`)
+    }
+
+    let snapshotUsageOverview: SnapshotUsageOverviewInternalDto | null = null
+
+    // check cache first
+    const cacheKey = `snapshot-usage-${organizationId}`
+    const cachedData = await this.redis.get(cacheKey)
+
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData)
+        return SnapshotUsageOverviewSchema.parse(parsed)
+      } catch {
+        this.logger.warn(`Failed to parse cached snapshot usage overview for organization ${organizationId}`)
+        this.redis.del(cacheKey)
+      }
+    }
+
+    // cache hit
+    if (snapshotUsageOverview) {
+      return snapshotUsageOverview
+    }
+
+    // cache miss
+    const currentSnapshotUsage = await this.snapshotRepository.count({
+      where: {
+        organizationId,
+        state: Not(In([SnapshotState.ERROR, SnapshotState.BUILD_FAILED, SnapshotState.INACTIVE])),
+      },
+    })
+
+    snapshotUsageOverview = {
+      totalSnapshotQuota: organization.snapshotQuota,
+      currentSnapshotUsage,
+    }
+
+    // cache the result
+    await this.redis.setex(cacheKey, 10, JSON.stringify(snapshotUsageOverview))
+
+    return snapshotUsageOverview
+  }
+
+  async getVolumeUsageOverview(
+    organizationId: string,
+    organization?: Organization,
+  ): Promise<VolumeUsageOverviewInternalDto> {
+    if (organization && organization.id !== organizationId) {
+      throw new BadRequestException('Organization ID mismatch')
+    }
+
+    if (!organization) {
+      organization = await this.organizationRepository.findOne({ where: { id: organizationId } })
+    }
+
+    if (!organization) {
+      throw new NotFoundException(`Organization with ID ${organizationId} not found`)
+    }
+
+    let volumeUsageOverview: VolumeUsageOverviewInternalDto | null = null
+
+    // check cache first
+    const cacheKey = `volume-usage-${organizationId}`
+    const cachedData = await this.redis.get(cacheKey)
+
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData)
+        return VolumeUsageOverviewSchema.parse(parsed)
+      } catch {
+        this.logger.warn(`Failed to parse cached volume usage overview for organization ${organizationId}`)
+        this.redis.del(cacheKey)
+      }
+    }
+
+    // cache hit
+    if (volumeUsageOverview) {
+      return volumeUsageOverview
+    }
+
+    // cache miss
+    const currentVolumeUsage = await this.volumeRepository.count({
+      where: {
+        organizationId,
+        state: Not(In([VolumeState.DELETED, VolumeState.ERROR])),
+      },
+    })
+
+    volumeUsageOverview = {
+      totalVolumeQuota: organization.volumeQuota,
+      currentVolumeUsage,
+    }
+
+    // cache the result
+    await this.redis.setex(cacheKey, 10, JSON.stringify(volumeUsageOverview))
+
+    return volumeUsageOverview
+  }
+
   async getUsageOverview(organizationId: string): Promise<OrganizationUsageOverviewDto> {
     const organization = await this.organizationRepository.findOne({ where: { id: organizationId } })
     if (!organization) {
       throw new NotFoundException(`Organization with ID ${organizationId} not found`)
     }
 
-    // Get all sandboxes for the organization, excluding destroyed and error ones
-    const sandboxes = await this.sandboxRepository.find({
-      where: {
-        organizationId,
-        state: Not(In([SandboxState.DESTROYED, SandboxState.ERROR, SandboxState.BUILD_FAILED, SandboxState.ARCHIVED])),
-      },
-    })
-
-    // Get running sandboxes
-    const runningSandboxes = sandboxes.filter((s) => s.state === SandboxState.STARTED)
-
-    // Calculate current usage
-    const currentCpuUsage = runningSandboxes.reduce((sum, s) => sum + s.cpu, 0)
-    const currentMemoryUsage = runningSandboxes.reduce((sum, s) => sum + s.mem, 0)
-    const currentDiskUsage = sandboxes.reduce((sum, s) => sum + s.disk, 0)
+    const sandboxUsageOverview = await this.getSandboxUsageOverview(organizationId, organization)
+    const snapshotUsageOverview = await this.getSnapshotUsageOverview(organizationId, organization)
+    const volumeUsageOverview = await this.getVolumeUsageOverview(organizationId, organization)
 
     return {
-      totalCpuQuota: organization.totalCpuQuota,
-      totalGpuQuota: 0,
-      totalMemoryQuota: organization.totalMemoryQuota,
-      totalDiskQuota: organization.totalDiskQuota,
-      currentCpuUsage,
-      currentMemoryUsage,
-      currentDiskUsage,
+      ...sandboxUsageOverview,
+      ...snapshotUsageOverview,
+      ...volumeUsageOverview,
     }
   }
 
