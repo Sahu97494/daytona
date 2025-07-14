@@ -8,6 +8,13 @@ import { z } from 'zod'
 export const SnapshotUsageOverviewSchema = z.object({
   totalSnapshotQuota: z.number(),
   currentSnapshotUsage: z.number(),
+  _fetchedAt: z.date(),
 })
 
-export type SnapshotUsageOverviewInternalDto = z.infer<typeof SnapshotUsageOverviewSchema>
+export type SnapshotUsageOverviewInternalDto = {
+  totalSnapshotQuota: number
+  currentSnapshotUsage: number
+  _fetchedAt: Date
+}
+
+//export type SnapshotUsageOverviewInternalDto = z.infer<typeof SnapshotUsageOverviewSchema>

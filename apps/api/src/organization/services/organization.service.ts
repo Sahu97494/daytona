@@ -159,7 +159,7 @@ export class OrganizationService implements OnModuleInit {
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData)
-        sandboxUsageOverview = SandboxUsageOverviewSchema.parse(parsed)
+        sandboxUsageOverview = SandboxUsageOverviewSchema.parse(parsed) as SandboxUsageOverviewInternalDto
       } catch {
         this.logger.warn(`Failed to parse cached sandbox usage overview for organization ${organizationId}`)
         this.redis.del(cacheKey)
@@ -168,7 +168,14 @@ export class OrganizationService implements OnModuleInit {
 
     // cache hit
     if (sandboxUsageOverview) {
-      return sandboxUsageOverview
+      const oneHourAgo = new Date(Date.now() - 1000 * 60 * 60)
+
+      if (sandboxUsageOverview._fetchedAt >= oneHourAgo) {
+        return sandboxUsageOverview
+      }
+
+      // cache expired (fetched from db more than 1 hour ago), invalidate it
+      await this.redis.del(cacheKey)
     }
 
     // cache miss
@@ -202,6 +209,7 @@ export class OrganizationService implements OnModuleInit {
       currentCpuUsage,
       currentMemoryUsage,
       currentDiskUsage,
+      _fetchedAt: new Date(),
     }
 
     // cache the result
@@ -235,7 +243,7 @@ export class OrganizationService implements OnModuleInit {
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData)
-        return SnapshotUsageOverviewSchema.parse(parsed)
+        return SnapshotUsageOverviewSchema.parse(parsed) as SnapshotUsageOverviewInternalDto
       } catch {
         this.logger.warn(`Failed to parse cached snapshot usage overview for organization ${organizationId}`)
         this.redis.del(cacheKey)
@@ -244,7 +252,14 @@ export class OrganizationService implements OnModuleInit {
 
     // cache hit
     if (snapshotUsageOverview) {
-      return snapshotUsageOverview
+      const oneHourAgo = new Date(Date.now() - 1000 * 60 * 60)
+
+      if (snapshotUsageOverview._fetchedAt >= oneHourAgo) {
+        return snapshotUsageOverview
+      }
+
+      // cache expired (fetched from db more than 1 hour ago), invalidate it
+      await this.redis.del(cacheKey)
     }
 
     // cache miss
@@ -258,6 +273,7 @@ export class OrganizationService implements OnModuleInit {
     snapshotUsageOverview = {
       totalSnapshotQuota: organization.snapshotQuota,
       currentSnapshotUsage,
+      _fetchedAt: new Date(),
     }
 
     // cache the result
@@ -291,7 +307,7 @@ export class OrganizationService implements OnModuleInit {
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData)
-        return VolumeUsageOverviewSchema.parse(parsed)
+        return VolumeUsageOverviewSchema.parse(parsed) as VolumeUsageOverviewInternalDto
       } catch {
         this.logger.warn(`Failed to parse cached volume usage overview for organization ${organizationId}`)
         this.redis.del(cacheKey)
@@ -300,7 +316,14 @@ export class OrganizationService implements OnModuleInit {
 
     // cache hit
     if (volumeUsageOverview) {
-      return volumeUsageOverview
+      const oneHourAgo = new Date(Date.now() - 1000 * 60 * 60)
+
+      if (volumeUsageOverview._fetchedAt >= oneHourAgo) {
+        return volumeUsageOverview
+      }
+
+      // cache expired (fetched from db more than 1 hour ago), invalidate it
+      await this.redis.del(cacheKey)
     }
 
     // cache miss
@@ -314,6 +337,7 @@ export class OrganizationService implements OnModuleInit {
     volumeUsageOverview = {
       totalVolumeQuota: organization.volumeQuota,
       currentVolumeUsage,
+      _fetchedAt: new Date(),
     }
 
     // cache the result
