@@ -24,7 +24,7 @@ import {
   HealthStatus,
 } from '@daytonaio/runner-grpc-client'
 import { ClientGrpc, ClientProxyFactory, Transport } from '@nestjs/microservices'
-import { credentials, Metadata } from '@grpc/grpc-js'
+import { ChannelCredentials, credentials, Metadata } from '@grpc/grpc-js'
 import { join } from 'node:path'
 import { firstValueFrom } from 'rxjs'
 
@@ -86,12 +86,29 @@ export class RunnerAdapterV1 implements RunnerAdapter {
   }
 
   public async init(runner: Runner): Promise<void> {
+    // Get grpc security scheme from runner url
+    // api url must be in format: scheme://url where scheme is either grpc or grpcs
+    // if scheme is grpcs, we need to use credentials.createSsl()
+    // if scheme is grpc, we need to use credentials.createInsecure()
+    const [scheme, url] = runner.apiUrl.split('://')
+    let creds: ChannelCredentials
+    switch (scheme) {
+      case 'grpc':
+        creds = credentials.createInsecure()
+        break
+      case 'grpcs':
+        creds = credentials.createSsl()
+        break
+      default:
+        throw new Error(`Invalid runner apiUrl: ${runner.apiUrl}`)
+    }
+
     this.runner = runner
     this.runnerClient = ClientProxyFactory.create({
       transport: Transport.GRPC,
       options: {
-        credentials: credentials.createInsecure(),
-        url: runner.apiUrl,
+        credentials: creds,
+        url: url,
         package: RUNNER_V1_PACKAGE_NAME,
         protoPath: [join(__dirname, 'proto/runner/v1/runner.proto')],
         loader: {

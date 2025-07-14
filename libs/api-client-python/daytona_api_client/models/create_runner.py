@@ -38,8 +38,9 @@ class CreateRunner(BaseModel):
     var_class: StrictStr = Field(alias="class")
     capacity: Union[StrictFloat, StrictInt]
     region: StrictStr
+    version: StrictStr
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["domain", "apiUrl", "apiKey", "cpu", "memory", "disk", "gpu", "gpuType", "class", "capacity", "region"]
+    __properties: ClassVar[List[str]] = ["domain", "apiUrl", "apiKey", "cpu", "memory", "disk", "gpu", "gpuType", "class", "capacity", "region", "version"]
 
     @field_validator('var_class')
     def var_class_validate_enum(cls, value):
@@ -123,7 +124,8 @@ class CreateRunner(BaseModel):
             "gpuType": obj.get("gpuType"),
             "class": obj.get("class"),
             "capacity": obj.get("capacity"),
-            "region": obj.get("region")
+            "region": obj.get("region"),
+            "version": obj.get("version")
         })
         # store additional fields in additional_properties
         for _key in obj.keys():

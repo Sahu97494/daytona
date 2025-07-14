@@ -28,6 +28,8 @@ type Runner struct {
 	Domain string `json:"domain"`
 	// The API URL of the runner
 	ApiUrl string `json:"apiUrl"`
+	// The proxy domain of the runner
+	ProxyUrl string `json:"proxyUrl"`
 	// The API key for the runner
 	ApiKey string `json:"apiKey"`
 	// The CPU capacity of the runner
@@ -58,6 +60,8 @@ type Runner struct {
 	CreatedAt string `json:"createdAt"`
 	// The last update timestamp of the runner
 	UpdatedAt string `json:"updatedAt"`
+	// The version of the runner
+	Version string `json:"version"`
 }
 
 type _Runner Runner
@@ -66,11 +70,12 @@ type _Runner Runner
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewRunner(id string, domain string, apiUrl string, apiKey string, cpu float32, memory float32, disk float32, gpu float32, gpuType string, class SandboxClass, used float32, capacity float32, region RunnerRegion, state RunnerState, unschedulable bool, createdAt string, updatedAt string) *Runner {
+func NewRunner(id string, domain string, apiUrl string, proxyUrl string, apiKey string, cpu float32, memory float32, disk float32, gpu float32, gpuType string, class SandboxClass, used float32, capacity float32, region RunnerRegion, state RunnerState, unschedulable bool, createdAt string, updatedAt string, version string) *Runner {
 	this := Runner{}
 	this.Id = id
 	this.Domain = domain
 	this.ApiUrl = apiUrl
+	this.ProxyUrl = proxyUrl
 	this.ApiKey = apiKey
 	this.Cpu = cpu
 	this.Memory = memory
@@ -85,6 +90,7 @@ func NewRunner(id string, domain string, apiUrl string, apiKey string, cpu float
 	this.Unschedulable = unschedulable
 	this.CreatedAt = createdAt
 	this.UpdatedAt = updatedAt
+	this.Version = version
 	return &this
 }
 
@@ -166,6 +172,30 @@ func (o *Runner) GetApiUrlOk() (*string, bool) {
 // SetApiUrl sets field value
 func (o *Runner) SetApiUrl(v string) {
 	o.ApiUrl = v
+}
+
+// GetProxyUrl returns the ProxyUrl field value
+func (o *Runner) GetProxyUrl() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.ProxyUrl
+}
+
+// GetProxyUrlOk returns a tuple with the ProxyUrl field value
+// and a boolean to check if the value has been set.
+func (o *Runner) GetProxyUrlOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.ProxyUrl, true
+}
+
+// SetProxyUrl sets field value
+func (o *Runner) SetProxyUrl(v string) {
+	o.ProxyUrl = v
 }
 
 // GetApiKey returns the ApiKey field value
@@ -536,6 +566,30 @@ func (o *Runner) SetUpdatedAt(v string) {
 	o.UpdatedAt = v
 }
 
+// GetVersion returns the Version field value
+func (o *Runner) GetVersion() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.Version
+}
+
+// GetVersionOk returns a tuple with the Version field value
+// and a boolean to check if the value has been set.
+func (o *Runner) GetVersionOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Version, true
+}
+
+// SetVersion sets field value
+func (o *Runner) SetVersion(v string) {
+	o.Version = v
+}
+
 func (o Runner) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -549,6 +603,7 @@ func (o Runner) ToMap() (map[string]interface{}, error) {
 	toSerialize["id"] = o.Id
 	toSerialize["domain"] = o.Domain
 	toSerialize["apiUrl"] = o.ApiUrl
+	toSerialize["proxyUrl"] = o.ProxyUrl
 	toSerialize["apiKey"] = o.ApiKey
 	toSerialize["cpu"] = o.Cpu
 	toSerialize["memory"] = o.Memory
@@ -566,6 +621,7 @@ func (o Runner) ToMap() (map[string]interface{}, error) {
 	toSerialize["unschedulable"] = o.Unschedulable
 	toSerialize["createdAt"] = o.CreatedAt
 	toSerialize["updatedAt"] = o.UpdatedAt
+	toSerialize["version"] = o.Version
 	return toSerialize, nil
 }
 
@@ -577,6 +633,7 @@ func (o *Runner) UnmarshalJSON(data []byte) (err error) {
 		"id",
 		"domain",
 		"apiUrl",
+		"proxyUrl",
 		"apiKey",
 		"cpu",
 		"memory",
@@ -591,6 +648,7 @@ func (o *Runner) UnmarshalJSON(data []byte) (err error) {
 		"unschedulable",
 		"createdAt",
 		"updatedAt",
+		"version",
 	}
 
 	allProperties := make(map[string]interface{})

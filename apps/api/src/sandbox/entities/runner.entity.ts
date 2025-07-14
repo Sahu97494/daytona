@@ -20,6 +20,9 @@ export class Runner {
   apiUrl: string
 
   @Column()
+  proxyUrl: string
+
+  @Column()
   apiKey: string
 
   @Column()

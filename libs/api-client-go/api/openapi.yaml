@@ -7139,6 +7139,7 @@ components:
         region: eu
         gpu: 5.962133916683182
         class: small
+        version: version
         gpuType: gpuType
         capacity: 5.637376656633329
       properties:
@@ -7174,6 +7175,8 @@ components:
             - asia
           example: eu
           type: string
+        version:
+          type: string
       required:
         - apiKey
         - apiUrl
@@ -7186,6 +7189,7 @@ components:
         - gpuType
         - memory
         - region
+        - version
       type: object
     SandboxClass:
       description: The class of the runner
@@ -7214,9 +7218,11 @@ components:
       example:
         memory: 16
         apiKey: api-key-123
+        proxyUrl: https://proxy.runner1.example.com
         cpu: 8
         used: 2
         gpu: 1
+        version: 1.0.0
         capacity: 10
         createdAt: 2023-10-01T12:00:00Z
         disk: 100
@@ -7242,6 +7248,10 @@ components:
         apiUrl:
           description: The API URL of the runner
           example: https://api.runner1.example.com
+          type: string
+        proxyUrl:
+          description: The proxy domain of the runner
+          example: https://proxy.runner1.example.com
           type: string
         apiKey:
           description: The API key for the runner
@@ -7305,6 +7315,10 @@ components:
           description: The last update timestamp of the runner
           example: 2023-10-01T12:00:00Z
           type: string
+        version:
+          description: The version of the runner
+          example: 1.0.0
+          type: string
       required:
         - apiKey
         - apiUrl
@@ -7318,11 +7332,13 @@ components:
         - gpuType
         - id
         - memory
+        - proxyUrl
         - region
         - state
         - unschedulable
         - updatedAt
         - used
+        - version
       type: object
     RunnerSnapshotDto:
       example:

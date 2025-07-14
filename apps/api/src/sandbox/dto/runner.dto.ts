@@ -31,6 +31,12 @@ export class RunnerDto {
   apiUrl: string
 
   @ApiProperty({
+    description: 'The proxy domain of the runner',
+    example: 'https://proxy.runner1.example.com',
+  })
+  proxyUrl: string
+
+  @ApiProperty({
     description: 'The API key for the runner',
     example: 'api-key-123',
   })
@@ -130,6 +136,12 @@ export class RunnerDto {
   })
   updatedAt: string
 
+  @ApiProperty({
+    description: 'The version of the runner',
+    example: '1.0.0',
+  })
+  version: string
+
   static fromRunner(runner: Runner): RunnerDto {
     return {
       id: runner.id,
@@ -150,6 +162,8 @@ export class RunnerDto {
       unschedulable: runner.unschedulable,
       createdAt: runner.createdAt.toISOString(),
       updatedAt: runner.updatedAt.toISOString(),
+      proxyUrl: runner.proxyUrl,
+      version: runner.version,
     }
   }
 }

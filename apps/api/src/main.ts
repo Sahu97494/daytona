@@ -100,11 +100,12 @@ async function bootstrap() {
 
   // Auto create runners only in local development environment
   if (!configService.get('production')) {
+    const localRunnerDomain = 'localtest.me'
     const runnerService = app.get(RunnerService)
     const runners = await runnerService.findAll()
-    if (!runners.find((runner) => runner.domain === 'localtest.me:50443')) {
+    if (!runners.find((runner) => runner.domain === localRunnerDomain)) {
       await runnerService.create({
-        apiUrl: 'localhost:50443',
+        apiUrl: 'grpc://localhost:3003',
         apiKey: 'secret_api_token',
         cpu: 4,
         memory: 8192,
@@ -114,7 +115,7 @@ async function bootstrap() {
         capacity: 100,
         region: RunnerRegion.US,
         class: SandboxClass.SMALL,
-        domain: 'localtest.me:50443',
+        domain: localRunnerDomain,
         version: '1',
       })
     }

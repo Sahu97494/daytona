@@ -42,7 +42,7 @@ export class ToolboxService {
 
         const requestConfig: any = {
           method,
-          url: `${runner.apiUrl}/sandboxes/${sandboxId}${path}`,
+          url: `${runner.domain}/sandboxes/${sandboxId}${path}`,
           headers,
           maxBodyLength: 209715200, // 200MB in bytes
           maxContentLength: 209715200, // 200MB in bytes
@@ -97,12 +97,6 @@ export class ToolboxService {
 
       if (sandbox.state !== SandboxState.STARTED) {
         throw new BadRequestException('Sandbox is not running')
-      }
-
-      // TODO: check how to handle versioning for this, also remove hardcoded ports
-      if (runner.version === '1') {
-        runner.apiUrl = runner.apiUrl.replace('50443', '8443')
-        runner.apiUrl = 'http://' + runner.apiUrl
       }
 
       return runner

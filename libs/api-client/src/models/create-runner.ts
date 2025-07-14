@@ -84,6 +84,12 @@ export interface CreateRunner {
    * @memberof CreateRunner
    */
   region: CreateRunnerRegionEnum
+  /**
+   *
+   * @type {string}
+   * @memberof CreateRunner
+   */
+  version: string
 }
 
 export const CreateRunnerClassEnum = {
