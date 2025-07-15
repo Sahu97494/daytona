@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { Sandbox } from '../../entities/sandbox.entity'
 import { SandboxState } from '../../enums/sandbox-state.enum'
-import { DONT_SYNC_AGAIN, SandboxAction, SYNC_AGAIN } from './sandbox.action'
+import { DONT_SYNC_AGAIN, SandboxAction, SyncState, SYNC_AGAIN } from './sandbox.action'
 import { BackupState } from '../../enums/backup-state.enum'
 import { RunnerState } from '../../enums/runner-state.enum'
 import { ToolboxService } from '../../services/toolbox.service'
@@ -22,7 +22,7 @@ export class SandboxStopAction extends SandboxAction {
     super(runnerService, runnerAdapterFactory, sandboxRepository, toolboxService)
   }
 
-  async run(sandbox: Sandbox) {
+  async run(sandbox: Sandbox): Promise<SyncState> {
     const runner = await this.runnerService.findOne(sandbox.runnerId)
     if (runner.state !== RunnerState.READY) {
       //  console.debug(`Runner ${runner.id} is not ready`);

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { Sandbox } from '../../entities/sandbox.entity'
 import { SandboxState } from '../../enums/sandbox-state.enum'
-import { DONT_SYNC_AGAIN, SandboxAction, SYNC_AGAIN } from './sandbox.action'
+import { DONT_SYNC_AGAIN, SandboxAction, SyncState, SYNC_AGAIN } from './sandbox.action'
 import { BackupState } from '../../enums/backup-state.enum'
 import { In, Repository } from 'typeorm'
 import { RedisLockProvider } from '../../common/redis-lock.provider'
@@ -26,7 +26,7 @@ export class SandboxArchiveAction extends SandboxAction {
     super(runnerService, runnerAdapterFactory, sandboxRepository, toolboxService)
   }
 
-  async run(sandbox: Sandbox) {
+  async run(sandbox: Sandbox): Promise<SyncState> {
     const lockKey = 'archive-lock-' + sandbox.runnerId
     if (!(await this.redisLockProvider.lock(lockKey, 10))) {
       return DONT_SYNC_AGAIN
@@ -45,7 +45,7 @@ export class SandboxArchiveAction extends SandboxAction {
 
     //  if the sandbox is already in progress, continue
     if (!inProgressOnRunner.find((s) => s.id === sandbox.id)) {
-      //  max 3 sandboxs can be archived at the same time on the same runner
+      //  max 3 sandboxes can be archived at the same time on the same runner
       //  this is to prevent the runner from being overloaded
       if (inProgressOnRunner.length > 2) {
         await this.redisLockProvider.unlock(lockKey)
@@ -82,9 +82,9 @@ export class SandboxArchiveAction extends SandboxAction {
           return DONT_SYNC_AGAIN
         }
 
-        // Check for timeout - if more than 30 minutes since last activity
-        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000)
-        if (sandbox.lastActivityAt < thirtyMinutesAgo) {
+        // Check for timeout - if more than 120 minutes since last activity
+        const timeout = new Date(Date.now() - 120 * 60 * 1000)
+        if (sandbox.lastActivityAt < timeout) {
           await this.updateSandboxState(sandbox.id, SandboxState.ERROR, undefined, 'Archiving operation timed out')
           return DONT_SYNC_AGAIN
         }

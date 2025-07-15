@@ -15,4 +15,3 @@ plugins:
       - nestJs=true
       - addGrpcMetadata=true
       - addNestjsRestParameter=true
-

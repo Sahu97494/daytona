@@ -32,7 +32,7 @@ export class SandboxStartAction extends SandboxAction {
     super(runnerService, runnerAdapterFactory, sandboxRepository, toolboxService)
   }
 
-  async run(sandbox: Sandbox) {
+  async run(sandbox: Sandbox): Promise<SyncState> {
     switch (sandbox.state) {
       case SandboxState.PENDING_BUILD: {
         return this.handleUnassignedBuildSandbox(sandbox)
@@ -76,8 +76,8 @@ export class SandboxStartAction extends SandboxAction {
           try {
             const daemonVersion = await this.getSandboxDaemonVersion(sandbox)
             sandboxToUpdate.daemonVersion = daemonVersion
-          } catch (e) {
-            this.logger.error(`Failed to get sandbox daemon version for sandbox ${sandbox.id}:`, e)
+          } catch (error) {
+            this.logger.error(`Failed to get sandbox daemon version for sandbox ${sandbox.id}:`, error)
           }
 
           await this.sandboxRepository.save(sandboxToUpdate)
@@ -195,9 +195,9 @@ export class SandboxStartAction extends SandboxAction {
     } else {
       sandbox.snapshot = sandbox.buildInfo.snapshotRef
       entrypoint = this.getEntrypointFromDockerfile(sandbox.buildInfo.dockerfileContent)
-
-      await runnerAdapter.create(sandbox, registry, entrypoint)
     }
+
+    await runnerAdapter.create(sandbox, registry, entrypoint)
 
     await this.updateSandboxState(sandbox.id, SandboxState.CREATING)
     //  sync states again immediately for sandbox
@@ -210,28 +210,28 @@ export class SandboxStartAction extends SandboxAction {
     //  this will assign a new runner to the sandbox and restore the sandbox from the latest backup
     if (sandbox.runnerId) {
       const runner = await this.runnerService.findOne(sandbox.runnerId)
-      if (runner.unschedulable) {
-        //  check if sandbox has a valid backup
-        if (sandbox.backupState !== BackupState.COMPLETED) {
-          //  if not, keep sandbox on the same runner
-        } else {
-          sandbox.prevRunnerId = sandbox.runnerId
-          sandbox.runnerId = null
+      const originalRunnerId = sandbox.runnerId // Store original value
 
-          const sandboxToUpdate = await this.sandboxRepository.findOneByOrFail({
-            id: sandbox.id,
-          })
-          sandboxToUpdate.prevRunnerId = sandbox.runnerId
-          sandboxToUpdate.runnerId = null
-          await this.sandboxRepository.save(sandboxToUpdate)
-        }
+      // if the runner is unschedulable and sandbox has a valid backup, move sandbox to prevRunnerId
+      if (runner.unschedulable && sandbox.backupState === BackupState.COMPLETED) {
+        sandbox.prevRunnerId = originalRunnerId
+        sandbox.runnerId = null
+
+        const sandboxToUpdate = await this.sandboxRepository.findOneByOrFail({
+          id: sandbox.id,
+        })
+        sandboxToUpdate.prevRunnerId = originalRunnerId
+        sandboxToUpdate.runnerId = null
+        await this.sandboxRepository.save(sandboxToUpdate)
       }
 
+      // If the sandbox is on a runner and its backupState is COMPLETED
+      // but there are too many running sandboxes on that runner, move it to a less used runner
       if (sandbox.backupState === BackupState.COMPLETED) {
         const usageThreshold = 35
         const runningSandboxsCount = await this.sandboxRepository.count({
           where: {
-            runnerId: sandbox.runnerId,
+            runnerId: originalRunnerId,
             state: SandboxState.STARTED,
           },
         })
@@ -242,21 +242,21 @@ export class SandboxStartAction extends SandboxAction {
             region: sandbox.region,
             sandboxClass: sandbox.class,
           })
-          const lessUsedRunners = availableRunners.filter((runner) => runner.id !== sandbox.runnerId)
+          const lessUsedRunners = availableRunners.filter((runner) => runner.id !== originalRunnerId)
 
-          //  temp workaround to move sandboxs to less used runner
+          //  temp workaround to move sandboxes to less used runner
           if (lessUsedRunners.length > 0) {
             await this.sandboxRepository.update(sandbox.id, {
               runnerId: null,
-              prevRunnerId: sandbox.runnerId,
+              prevRunnerId: originalRunnerId,
             })
             try {
               const runnerAdapter = await this.runnerAdapterFactory.create(runner)
               await runnerAdapter.removeDestroyed(sandbox.id)
-            } catch (e) {
-              this.logger.error(`Failed to cleanup sandbox ${sandbox.id} on previous runner ${runner.id}:`)
+            } catch (error) {
+              this.logger.error(`Failed to cleanup sandbox ${sandbox.id} on previous runner ${runner.id}:`, error)
             }
-            sandbox.prevRunnerId = sandbox.runnerId
+            sandbox.prevRunnerId = originalRunnerId
             sandbox.runnerId = null
           }
         }
@@ -267,7 +267,7 @@ export class SandboxStartAction extends SandboxAction {
       //  if sandbox has no runner, check if backup is completed
       //  if not, set sandbox to error
       //  if backup is completed, get random available runner and start sandbox
-      //  use the backup snapshot to start the sandbox
+      //  use the backup to start the sandbox
 
       if (sandbox.backupState !== BackupState.COMPLETED) {
         await this.updateSandboxState(
@@ -298,16 +298,14 @@ export class SandboxStartAction extends SandboxAction {
           } else {
             validBackup = existingBackups.pop()
           }
-
           if (await this.dockerProvider.checkImageExistsInRegistry(validBackup, registry)) {
             exists = true
             break
           }
-
-          sandbox.snapshot = validBackup
         } catch (error) {
           this.logger.error(
             `Failed to check if backup snapshot ${sandbox.backupSnapshot} exists in registry ${registry.id}:`,
+            error,
           )
         }
       }
@@ -329,10 +327,10 @@ export class SandboxStartAction extends SandboxAction {
       const randomRunnerIndex = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1) + min)
       const runnerId = availableRunners[randomRunnerIndex(0, availableRunners.length - 1)].id
 
-      await this.updateSandboxState(sandbox.id, SandboxState.RESTORING, runnerId)
-
       const runner = await this.runnerService.findOne(runnerId)
       const runnerAdapter = await this.runnerAdapterFactory.create(runner)
+
+      await this.updateSandboxState(sandbox.id, SandboxState.RESTORING, runnerId)
 
       await runnerAdapter.create(sandbox, registry)
     } else {
@@ -384,8 +382,8 @@ export class SandboxStartAction extends SandboxAction {
         let daemonVersion: string | undefined
         try {
           daemonVersion = await this.getSandboxDaemonVersion(sandbox)
-        } catch (e) {
-          this.logger.error(`Failed to get sandbox daemon version for sandbox ${sandbox.id}:`, e)
+        } catch (error) {
+          this.logger.error(`Failed to get sandbox daemon version for sandbox ${sandbox.id}:`, error)
         }
 
         //  if previous backup state is error or completed, set backup state to none
@@ -447,15 +445,18 @@ export class SandboxStartAction extends SandboxAction {
 
             // Finally remove the destroyed sandbox
             await runnerAdapter.removeDestroyed(sandbox.id)
+
             sandbox.prevRunnerId = null
 
             const sandboxToUpdate = await this.sandboxRepository.findOneByOrFail({
               id: sandbox.id,
             })
+
             sandboxToUpdate.prevRunnerId = null
+
             await this.sandboxRepository.save(sandboxToUpdate)
-          } catch (e) {
-            this.logger.error(`Failed to cleanup sandbox ${sandbox.id} on previous runner ${runner.id}:`)
+          } catch (error) {
+            this.logger.error(`Failed to cleanup sandbox ${sandbox.id} on previous runner ${runner.id}:`, error)
           }
         }
         break
@@ -469,6 +470,7 @@ export class SandboxStartAction extends SandboxAction {
     return SYNC_AGAIN
   }
 
+  // TODO: revise/cleanup
   private getEntrypointFromDockerfile(dockerfileContent: string): string[] {
     // Match ENTRYPOINT with either a string or JSON array
     const entrypointMatch = dockerfileContent.match(/ENTRYPOINT\s+(.*)/)

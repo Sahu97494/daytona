@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { Sandbox } from '../../entities/sandbox.entity'
 import { SandboxState } from '../../enums/sandbox-state.enum'
-import { DONT_SYNC_AGAIN, SandboxAction, SYNC_AGAIN } from './sandbox.action'
+import { DONT_SYNC_AGAIN, SandboxAction, SyncState, SYNC_AGAIN } from './sandbox.action'
 import { RunnerState } from '../../enums/runner-state.enum'
 import { ToolboxService } from '../../services/toolbox.service'
 import { RunnerService } from '../../services/runner.service'
@@ -21,7 +21,7 @@ export class SandboxDestroyAction extends SandboxAction {
     super(runnerService, runnerAdapterFactory, sandboxRepository, toolboxService)
   }
 
-  async run(sandbox: Sandbox) {
+  async run(sandbox: Sandbox): Promise<SyncState> {
     if (sandbox.state === SandboxState.ARCHIVED) {
       await this.updateSandboxState(sandbox.id, SandboxState.DESTROYED)
       return DONT_SYNC_AGAIN

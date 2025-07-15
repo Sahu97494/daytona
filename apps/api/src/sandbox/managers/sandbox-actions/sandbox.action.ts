@@ -10,7 +10,6 @@ import { RunnerAdapterFactory } from '../../runner-adapter/runnerAdapter'
 import { Sandbox } from '../../entities/sandbox.entity'
 import { Repository } from 'typeorm'
 import { SandboxState } from '../../enums/sandbox-state.enum'
-import { Runner } from '../../entities/runner.entity'
 import { ToolboxService } from '../../services/toolbox.service'
 
 export const SYNC_AGAIN = 'sync-again'
