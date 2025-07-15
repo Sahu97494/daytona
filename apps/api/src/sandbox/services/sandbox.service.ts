@@ -77,9 +77,6 @@ export class SandboxService {
     disk: number,
     excludeSandboxId?: string,
   ): Promise<void> {
-    this.organizationService.assertOrganizationIsNotSuspended(organization)
-
-    // Check per-sandbox resource limits
     if (cpu > organization.maxCpuPerSandbox) {
       throw new ForbiddenException(
         `CPU request ${cpu} exceeds maximum allowed per sandbox (${organization.maxCpuPerSandbox})`,
@@ -254,6 +251,8 @@ export class SandboxService {
       }
     }
 
+    this.organizationService.assertOrganizationIsNotSuspended(organization)
+
     await this.validateOrganizationQuotas(organization, cpu, mem, disk)
 
     const warmPoolSandbox = await this.warmPoolService.fetchWarmPoolSandbox({
@@ -352,6 +351,8 @@ export class SandboxService {
     const mem = createSandboxDto.memory || DEFAULT_MEMORY
     const disk = createSandboxDto.disk || DEFAULT_DISK
     const gpu = createSandboxDto.gpu || DEFAULT_GPU
+
+    this.organizationService.assertOrganizationIsNotSuspended(organization)
 
     await this.validateOrganizationQuotas(organization, cpu, mem, disk)
 

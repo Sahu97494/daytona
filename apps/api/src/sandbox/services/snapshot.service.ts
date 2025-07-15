@@ -76,16 +76,7 @@ export class SnapshotService {
 
     this.organizationService.assertOrganizationIsNotSuspended(organization)
 
-    // check if the organization has reached the snapshot quota
-    const snapshots = await this.snapshotRepository.find({
-      where: { organizationId: organization.id },
-    })
-
-    if (snapshots.length >= organization.snapshotQuota) {
-      throw new ForbiddenException('Reached the maximum number of snapshots in the organization')
-    }
-
-    await this.validateOrganizationMaxQuotas(
+    await this.validateOrganizationQuotas(
       organization,
       createSnapshotDto.cpu,
       createSnapshotDto.memory,
@@ -235,7 +226,7 @@ export class SnapshotService {
     return await this.snapshotRepository.save(snapshot)
   }
 
-  private async validateOrganizationMaxQuotas(
+  private async validateOrganizationQuotas(
     organization: Organization,
     cpu?: number,
     memory?: number,
@@ -255,6 +246,12 @@ export class SnapshotService {
       throw new ForbiddenException(
         `Disk request ${disk}GB exceeds maximum allowed per sandbox (${organization.maxDiskPerSandbox}GB)`,
       )
+    }
+
+    const snapshotUsageOverview = await this.organizationService.getSnapshotUsageOverview(organization.id, organization)
+
+    if (snapshotUsageOverview.currentSnapshotUsage + 1 > organization.snapshotQuota) {
+      throw new ForbiddenException('Reached the maximum number of snapshots in the organization')
     }
   }
 
