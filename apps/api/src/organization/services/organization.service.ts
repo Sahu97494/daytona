@@ -50,6 +50,8 @@ import {
 import { VolumeState } from '../../sandbox/enums/volume-state.enum'
 import { VolumeUsageOverviewInternalDto, VolumeUsageOverviewSchema } from '../dto/volume-usage-overview-internal.dto'
 import { SnapshotState } from '../../sandbox/enums/snapshot-state.enum'
+import { SANDBOX_USAGE_OVERVIEW_IGNORED_STATES } from '../constants/sandbox-usage-overview-ignored-states.constant'
+import { SANDBOX_USAGE_OVERVIEW_INACTIVE_STATES } from '../constants/sandbox-usage-overview-inactive-states.constant'
 
 @Injectable()
 export class OrganizationService implements OnModuleInit {
@@ -137,6 +139,7 @@ export class OrganizationService implements OnModuleInit {
   async getSandboxUsageOverview(
     organizationId: string,
     organization?: Organization,
+    excludeSandboxId?: string,
   ): Promise<SandboxUsageOverviewInternalDto> {
     if (organization && organization.id !== organizationId) {
       throw new BadRequestException('Organization ID mismatch')
@@ -171,6 +174,10 @@ export class OrganizationService implements OnModuleInit {
       const oneHourAgo = new Date(Date.now() - 1000 * 60 * 60)
 
       if (sandboxUsageOverview._fetchedAt >= oneHourAgo) {
+        if (excludeSandboxId) {
+          return this.excludeSandboxFromUsageOverview(sandboxUsageOverview, excludeSandboxId)
+        }
+
         return sandboxUsageOverview
       }
 
@@ -179,9 +186,6 @@ export class OrganizationService implements OnModuleInit {
     }
 
     // cache miss
-    const ignoredStates = [SandboxState.DESTROYED, SandboxState.ARCHIVED, SandboxState.ERROR, SandboxState.BUILD_FAILED]
-    const inactiveStates = [...ignoredStates, SandboxState.STOPPED, SandboxState.ARCHIVING]
-
     const sandboxUsageMetrics: {
       used_disk: number
       used_cpu: number
@@ -194,8 +198,8 @@ export class OrganizationService implements OnModuleInit {
         'SUM(CASE WHEN sandbox.state NOT IN (:...inactiveStates) THEN sandbox.mem ELSE 0 END) as used_mem',
       ])
       .where('sandbox.organizationId = :organizationId', { organizationId })
-      .setParameter('ignoredStates', ignoredStates)
-      .setParameter('inactiveStates', inactiveStates)
+      .setParameter('ignoredStates', SANDBOX_USAGE_OVERVIEW_IGNORED_STATES)
+      .setParameter('inactiveStates', SANDBOX_USAGE_OVERVIEW_INACTIVE_STATES)
       .getRawOne()
 
     const currentDiskUsage = Number(sandboxUsageMetrics.used_disk) || 0
@@ -215,7 +219,44 @@ export class OrganizationService implements OnModuleInit {
     // cache the result
     await this.redis.setex(cacheKey, 10, JSON.stringify(sandboxUsageOverview))
 
+    if (excludeSandboxId) {
+      return await this.excludeSandboxFromUsageOverview(sandboxUsageOverview, excludeSandboxId)
+    }
+
     return sandboxUsageOverview
+  }
+
+  private async excludeSandboxFromUsageOverview(
+    usageOverview: SandboxUsageOverviewInternalDto,
+    excludeSandboxId: string,
+  ): Promise<SandboxUsageOverviewInternalDto> {
+    const excludedSandbox = await this.sandboxRepository.findOne({
+      where: { id: excludeSandboxId },
+    })
+
+    if (!excludedSandbox) {
+      return usageOverview
+    }
+
+    let cpuToSubtract = 0
+    let memToSubtract = 0
+    let diskToSubtract = 0
+
+    if (!SANDBOX_USAGE_OVERVIEW_IGNORED_STATES.includes(excludedSandbox.state)) {
+      diskToSubtract = excludedSandbox.disk
+    }
+
+    if (!SANDBOX_USAGE_OVERVIEW_INACTIVE_STATES.includes(excludedSandbox.state)) {
+      cpuToSubtract = excludedSandbox.cpu
+      memToSubtract = excludedSandbox.mem
+    }
+
+    return {
+      ...usageOverview,
+      currentCpuUsage: Math.max(0, usageOverview.currentCpuUsage - cpuToSubtract),
+      currentMemoryUsage: Math.max(0, usageOverview.currentMemoryUsage - memToSubtract),
+      currentDiskUsage: Math.max(0, usageOverview.currentDiskUsage - diskToSubtract),
+    }
   }
 
   async getSnapshotUsageOverview(
