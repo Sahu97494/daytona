@@ -100,12 +100,16 @@ async function bootstrap() {
 
   // Auto create runners only in local development environment
   if (!configService.get('production')) {
-    const localRunnerDomain = 'localtest.me'
+    const localGrpcRunnerDomain = 'localtest.me'
+    const localHttpRunnerDomain = 'localhost.me'
+
     const runnerService = app.get(RunnerService)
     const runners = await runnerService.findAll()
-    if (!runners.find((runner) => runner.domain === localRunnerDomain)) {
+
+    if (!runners.find((runner) => runner.domain === localGrpcRunnerDomain)) {
       await runnerService.create({
         apiUrl: 'grpc://localhost:3003',
+        proxyUrl: 'http://localhost:3004',
         apiKey: 'secret_api_token',
         cpu: 4,
         memory: 8192,
@@ -115,8 +119,26 @@ async function bootstrap() {
         capacity: 100,
         region: RunnerRegion.US,
         class: SandboxClass.SMALL,
-        domain: localRunnerDomain,
+        domain: localGrpcRunnerDomain,
         version: '1',
+      })
+    }
+
+    if (!runners.find((runner) => runner.domain === localHttpRunnerDomain)) {
+      await runnerService.create({
+        apiUrl: 'http://localhost:3005',
+        proxyUrl: 'http://localhost:3005',
+        apiKey: 'secret_api_token',
+        cpu: 4,
+        memory: 8192,
+        disk: 50,
+        gpu: 0,
+        gpuType: 'none',
+        capacity: 100,
+        region: RunnerRegion.EU,
+        class: SandboxClass.SMALL,
+        domain: localHttpRunnerDomain,
+        version: '0',
       })
     }
   }

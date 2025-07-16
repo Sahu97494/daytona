@@ -53,6 +53,7 @@ export class RunnerService {
     const runner = new Runner()
     runner.domain = createRunnerDto.domain
     runner.apiUrl = createRunnerDto.apiUrl
+    runner.proxyUrl = createRunnerDto.proxyUrl
     runner.apiKey = createRunnerDto.apiKey
     runner.cpu = createRunnerDto.cpu
     runner.memory = createRunnerDto.memory

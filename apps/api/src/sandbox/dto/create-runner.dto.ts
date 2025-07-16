@@ -20,6 +20,10 @@ export class CreateRunnerDto {
 
   @IsString()
   @ApiProperty()
+  proxyUrl: string
+
+  @IsString()
+  @ApiProperty()
   apiKey: string
 
   @IsNumber()

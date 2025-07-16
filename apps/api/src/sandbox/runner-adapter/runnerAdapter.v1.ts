@@ -22,6 +22,7 @@ import {
   SNAPSHOT_SERVICE_NAME,
   HEALTH_SERVICE_NAME,
   HealthStatus,
+  CreateSandboxRequest,
 } from '@daytonaio/runner-grpc-client'
 import { ClientGrpc, ClientProxyFactory, Transport } from '@nestjs/microservices'
 import { ChannelCredentials, credentials, Metadata } from '@grpc/grpc-js'
@@ -149,29 +150,29 @@ export class RunnerAdapterV1 implements RunnerAdapter {
   }
 
   async create(sandbox: Sandbox, registry: DockerRegistry, entrypoint?: string[]): Promise<void> {
-    await firstValueFrom(
-      this.sandboxServiceClient.createSandbox(
-        {
-          id: sandbox.id,
-          snapshot: sandbox.snapshot,
-          osUser: sandbox.osUser,
-          userId: sandbox.organizationId,
-          storageQuota: sandbox.disk,
-          memoryQuota: sandbox.mem,
-          cpuQuota: sandbox.cpu,
-          gpuQuota: sandbox.gpu,
-          env: sandbox.env,
-          registry: {
-            url: registry.url,
-            username: registry.username,
-            password: registry.password,
-          },
-          entrypoint: entrypoint || [],
-          volumes: sandbox.volumes,
-        },
-        this.getMetadata(),
-      ),
-    )
+    const request: CreateSandboxRequest = {
+      id: sandbox.id,
+      snapshot: sandbox.snapshot,
+      osUser: sandbox.osUser,
+      userId: sandbox.organizationId,
+      storageQuota: sandbox.disk,
+      memoryQuota: sandbox.mem,
+      cpuQuota: sandbox.cpu,
+      gpuQuota: sandbox.gpu,
+      env: sandbox.env,
+      volumes: sandbox.volumes,
+      entrypoint: entrypoint || [],
+    }
+
+    if (registry) {
+      request.registry = {
+        url: registry.url,
+        username: registry.username,
+        password: registry.password,
+      }
+    }
+
+    await firstValueFrom(this.sandboxServiceClient.createSandbox(request, this.getMetadata()))
   }
 
   async createBackup(sandbox: Sandbox, backupSnapshotName: string, registry: DockerRegistry): Promise<void> {
