@@ -167,7 +167,6 @@ export class SandboxStartAction extends SandboxAction {
   private async handleRunnerSandboxUnknownStateOnDesiredStateStart(sandbox: Sandbox): Promise<SyncState> {
     const runner = await this.runnerService.findOne(sandbox.runnerId)
     if (runner.state !== RunnerState.READY) {
-      //  console.debug(`Runner ${runner.id} is not ready`);
       return DONT_SYNC_AGAIN
     }
 
@@ -359,12 +358,12 @@ export class SandboxStartAction extends SandboxAction {
     const runnerAdapter = await this.runnerAdapterFactory.create(runner)
     const sandboxInfo = await runnerAdapter.info(sandbox.id)
 
-    if (
-      sandboxInfo.state === SandboxState.PULLING_SNAPSHOT ||
-      sandboxInfo.state === SandboxState.ERROR ||
-      sandboxInfo.state === SandboxState.STARTING
-    ) {
-      await this.updateSandboxState(sandbox.id, sandboxInfo.state)
+    if (sandboxInfo.state === SandboxState.PULLING_SNAPSHOT) {
+      await this.updateSandboxState(sandbox.id, SandboxState.PULLING_SNAPSHOT)
+    } else if (sandboxInfo.state === SandboxState.ERROR) {
+      await this.updateSandboxState(sandbox.id, SandboxState.ERROR)
+    } else {
+      await this.updateSandboxState(sandbox.id, SandboxState.STARTED)
     }
 
     return SYNC_AGAIN

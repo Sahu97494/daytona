@@ -42,7 +42,7 @@ export class ToolboxService {
 
         const requestConfig: any = {
           method,
-          url: `${runner.domain}/sandboxes/${sandboxId}${path}`,
+          url: `${runner.proxyUrl}/sandboxes/${sandboxId}${path}`,
           headers,
           maxBodyLength: 209715200, // 200MB in bytes
           maxContentLength: 209715200, // 200MB in bytes
