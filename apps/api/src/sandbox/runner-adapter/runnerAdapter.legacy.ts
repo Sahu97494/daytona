@@ -17,6 +17,7 @@ import {
   SnapshotsApi,
   EnumsBackupState,
   DefaultApi,
+  CreateSandboxDTO,
 } from '@daytonaio/runner-api-client'
 import { Sandbox } from '../entities/sandbox.entity'
 import { BuildInfo } from '../entities/build-info.entity'
@@ -29,9 +30,9 @@ const isDebugEnabled = process.env.DEBUG === 'true'
 @Injectable()
 export class RunnerAdapterLegacy implements RunnerAdapter {
   private readonly logger = new Logger(RunnerAdapterLegacy.name)
-  private apiClientSandbox: SandboxApi
-  private apiClientSnapshot: SnapshotsApi
-  private apiClient: DefaultApi
+  private sandboxApiClient: SandboxApi
+  private snapshotApiClient: SnapshotsApi
+  private runnerApiClient: DefaultApi
 
   private convertSandboxState(state: EnumsSandboxState): SandboxState {
     switch (state) {
@@ -116,19 +117,20 @@ export class RunnerAdapterLegacy implements RunnerAdapter {
       axiosDebug.addLogger(axiosInstance)
     }
 
-    this.apiClientSandbox = new SandboxApi(new Configuration(), '', axiosInstance)
-    this.apiClientSnapshot = new SnapshotsApi(new Configuration(), '', axiosInstance)
+    this.sandboxApiClient = new SandboxApi(new Configuration(), '', axiosInstance)
+    this.snapshotApiClient = new SnapshotsApi(new Configuration(), '', axiosInstance)
+    this.runnerApiClient = new DefaultApi(new Configuration(), '', axiosInstance)
   }
 
   async healthCheck(): Promise<void> {
-    const response = await this.apiClient.healthCheck()
+    const response = await this.runnerApiClient.healthCheck()
     if (response.data.status !== 'ok') {
       throw new Error('Runner is not healthy')
     }
   }
 
   async buildSnapshot(buildInfo: BuildInfo, organizationId?: string, registry?: DockerRegistry): Promise<void> {
-    await this.apiClientSnapshot.buildSnapshot({
+    await this.snapshotApiClient.buildSnapshot({
       snapshot: buildInfo.snapshotRef,
       registry: {
         project: registry.name,
@@ -143,7 +145,7 @@ export class RunnerAdapterLegacy implements RunnerAdapter {
   }
 
   async create(sandbox: Sandbox, registry: DockerRegistry, entrypoint?: string[]): Promise<void> {
-    await this.apiClientSandbox.create({
+    const request: CreateSandboxDTO = {
       id: sandbox.id,
       snapshot: sandbox.snapshot,
       osUser: sandbox.osUser,
@@ -152,18 +154,23 @@ export class RunnerAdapterLegacy implements RunnerAdapter {
       memoryQuota: sandbox.mem,
       cpuQuota: sandbox.cpu,
       env: sandbox.env,
-      registry: {
+      volumes: sandbox.volumes,
+      entrypoint: entrypoint || [],
+    }
+
+    if (registry) {
+      request.registry = {
         url: registry.url,
         username: registry.username,
         password: registry.password,
-      },
-      entrypoint: entrypoint || [],
-      volumes: sandbox.volumes,
-    })
+      }
+    }
+
+    await this.sandboxApiClient.create(request)
   }
 
   async createBackup(sandbox: Sandbox, backupSnapshotName: string, registry: DockerRegistry): Promise<void> {
-    await this.apiClientSandbox.createBackup(sandbox.id, {
+    await this.sandboxApiClient.createBackup(sandbox.id, {
       registry: {
         url: registry.url,
         username: registry.username,
@@ -174,7 +181,7 @@ export class RunnerAdapterLegacy implements RunnerAdapter {
   }
 
   async info(sandboxId: string): Promise<RunnerSandboxInfo> {
-    const sandboxInfo = await this.apiClientSandbox.info(sandboxId)
+    const sandboxInfo = await this.sandboxApiClient.info(sandboxId)
     return {
       state: this.convertSandboxState(sandboxInfo.data.state),
       backupState: this.convertBackupState(sandboxInfo.data.backupState),
@@ -182,37 +189,37 @@ export class RunnerAdapterLegacy implements RunnerAdapter {
   }
 
   async start(sandboxId: string): Promise<void> {
-    await this.apiClientSandbox.start(sandboxId)
+    await this.sandboxApiClient.start(sandboxId)
   }
 
   async stop(sandboxId: string): Promise<void> {
-    await this.apiClientSandbox.stop(sandboxId)
+    await this.sandboxApiClient.stop(sandboxId)
   }
 
   async destroy(sandboxId: string): Promise<void> {
-    await this.apiClientSandbox.destroy(sandboxId)
+    await this.sandboxApiClient.destroy(sandboxId)
   }
 
   async removeDestroyed(sandboxId: string): Promise<void> {
-    await this.apiClientSandbox.removeDestroyed(sandboxId)
+    await this.sandboxApiClient.removeDestroyed(sandboxId)
   }
 
   async removeSnapshot(snapshotName: string, force: boolean): Promise<void> {
-    await this.apiClientSnapshot.removeSnapshot(snapshotName)
+    await this.snapshotApiClient.removeSnapshot(snapshotName)
   }
 
   async getSnapshotLogs(snapshotRef: string, follow: boolean): Promise<string> {
-    const response = await this.apiClientSnapshot.getBuildLogs(snapshotRef, follow)
+    const response = await this.snapshotApiClient.getBuildLogs(snapshotRef, follow)
     return response.data
   }
 
   async snapshotExists(snapshotName: string): Promise<boolean> {
-    const response = await this.apiClientSnapshot.snapshotExists(snapshotName)
+    const response = await this.snapshotApiClient.snapshotExists(snapshotName)
     return response.data.exists
   }
 
   async pullSnapshot(snapshotName: string, registry: DockerRegistry): Promise<void> {
-    await this.apiClientSnapshot.pullSnapshot({
+    await this.snapshotApiClient.pullSnapshot({
       snapshot: snapshotName,
       registry: {
         url: registry.url,

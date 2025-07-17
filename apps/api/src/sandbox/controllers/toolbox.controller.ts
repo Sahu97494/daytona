@@ -70,7 +70,6 @@ import {
   KeyboardPressRequestDto,
   KeyboardHotkeyRequestDto,
   ScreenshotResponseDto,
-  RegionScreenshotRequestDto,
   RegionScreenshotResponseDto,
   CompressedScreenshotResponseDto,
   DisplayInfoResponseDto,
